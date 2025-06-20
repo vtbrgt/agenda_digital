@@ -83,108 +83,12 @@ import {
     ActivityIndicator,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import {FAB, Modal, PaperProvider, Portal} from "react-native-paper";
-
-type Item = {
-    id: string
-    nome: string
-}
-
-const STORAGE_KEY = 'meus-itens'
-
-
-const ListaDeItens = () => {
-    const [itens, setItens] = useState<Item[]>([])
-    const [carregando, setCarregando] = useState(true)
-    const [modalVisible, setModalVisible] = React.useState(false)
-
-    useEffect(() => {
-        const exemplo = [
-            { id: '1', nome: 'Item A' },
-            { id: '2', nome: 'Item B' },
-            { id: '3', nome: 'Item C' },
-        ]
-
-        AsyncStorage.setItem('meus-itens', JSON.stringify(exemplo))
-    }, []);
-
-    useEffect(() => {
-        const carregarItens = async () => {
-            try {
-                const dadosSalvos = await AsyncStorage.getItem(STORAGE_KEY)
-                if (dadosSalvos) {
-                    const lista: Item[] = JSON.parse(dadosSalvos)
-                    setItens(lista)
-                }
-            } catch (erro) {
-                console.error('Erro ao carregar itens do AsyncStorage:', erro)
-            } finally {
-                setCarregando(false)
-            }
-        }
-
-        carregarItens()
-    }, [])
-
-    // if (carregando) {
-    //     return (
-    //         <View style={styles.container}>
-    //             <ActivityIndicator size="large" color="#000" />
-    //             <Text>Carregando itens...</Text>
-    //         </View>
-    //     )
-    // }
-    //
-    // if (!itens.length) {
-    //     return (
-    //         <View style={styles.container}>
-    //             <Text>Nenhum item encontrado.</Text>
-    //         </View>
-    //     )
-    // }
-
-    return (
-        <View style={styles.container}>
-            {carregando && (
-                <>
-                    <ActivityIndicator size="large" color="#000" />
-                    <Text>Carregando itens...</Text>
-                </>
-            )}
-            {itens.length > 0 ? (
-                <>
-                    <Text style={{ textAlign: "center", fontWeight: "bold", fontSize: 18, marginBottom: 12 }}>Clientes agendados para hoje</Text>
-                    <FlatList
-                        data={itens}
-                        keyExtractor={(item) => item.id}
-                        renderItem={({ item }) => (
-                            <View style={styles.item}>
-                                <Text>{item.nome}</Text>
-                            </View>
-                        )}
-                    />
-                </>
-            ) : <Text>Nenhum item encontrado.</Text>}
-            <FAB
-                icon="plus"
-                style={styles.fab1}
-                onPress={() => console.log('Pressed1')}
-            />
-            <FAB
-                icon="calendar-edit"
-                style={styles.fab2}
-                onPress={() => setModalVisible(true)}
-            />
-            <PaperProvider>
-                <Portal>
-                    <Modal visible={modalVisible} onDismiss={() => setModalVisible(false)}>
-                        <Text>Example Modal.  Click outside this area to dismiss.</Text>
-                    </Modal>
-                </Portal>
-            </PaperProvider>
-        </View>
-    )
-}
+import {Button, FAB, IconButton, MD3Colors, Modal, PaperProvider, Portal, TextInput} from "react-native-paper";
+import {Agendamento} from "@/app/utils/types";
+import {useNavigation} from "@react-navigation/core";
+import RNDateTimePicker from "@react-native-community/datetimepicker";
+import {datasIguais, formatarDataBR, formatarHorarioBR, STORAGE_KEY} from "@/app/utils/utils";
+import {useRoute} from "@react-navigation/native";
 
 const styles = StyleSheet.create({
     container: {
@@ -199,6 +103,10 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         borderRadius: 8,
         elevation: 2,
+        display: 'flex',
+        justifyContent: 'space-between',
+        flexDirection: 'row',
+        alignItems: 'center'
     },
     fab1: {
         position: 'absolute',
@@ -212,6 +120,160 @@ const styles = StyleSheet.create({
         right: 0,
         bottom: 72,
     },
+    modalContainer: {
+        backgroundColor: 'white',
+        padding: 20,
+        margin: 20,
+        height: 180,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-evenly'
+    }
 })
+
+const ListaDeItens = () => {
+    const [itens, setItens] = useState<Agendamento[]>([])
+    const [carregando, setCarregando] = useState(true)
+    const [modalDeleteVisible, setModalDeleteVisible] = useState(false)
+    const [data, setData] = useState<Date | undefined>(new Date())
+    const navigation = useNavigation()
+    const [mostrarPicker, setMostrarPicker] = useState(false);
+    const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>();
+    const route = useRoute();
+
+    const carregarItens = async () => {
+        try {
+            const dadosSalvos = await AsyncStorage.getItem(STORAGE_KEY)
+            if (dadosSalvos) {
+                const lista: Agendamento[] = JSON.parse(dadosSalvos)
+                setItens(lista.filter(item => datasIguais(item.data, data)))
+            }
+        } catch (erro) {
+            console.error('Erro ao carregar itens do AsyncStorage:', erro)
+        } finally {
+            setCarregando(false)
+        }
+    }
+
+    const removerItem = async () => {
+        if (!agendamentoSelecionado) return
+        try {
+            const json = await AsyncStorage.getItem(STORAGE_KEY);
+            if (!json) return;
+
+            const lista = JSON.parse(json);
+
+            const novaLista = lista.filter((item: Agendamento) => !(
+                datasIguais(item.data, agendamentoSelecionado.data) &&
+                item.nome === agendamentoSelecionado.nome
+            ));
+
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(novaLista));
+
+            carregarItens()
+            console.log('Item removido com sucesso!');
+            setModalDeleteVisible(false)
+        } catch (error) {
+            console.error('Erro ao remover item:', error);
+        }
+    }
+
+    useEffect(() => {
+        carregarItens()
+    }, [data])
+
+    useEffect(() => {
+        if (!route.params) return
+        else if (route.params.reload) carregarItens()
+    }, [route]);
+
+    return (
+        <PaperProvider>
+            <View style={styles.container}>
+                {carregando && (
+                    <>
+                        <ActivityIndicator size="large" color="#000" />
+                        <Text>Carregando itens...</Text>
+                    </>
+                )}
+                {itens.length > 0 ? (
+                    <>
+                        <Text style={{ textAlign: "center", fontWeight: "bold", fontSize: 18, marginBottom: 12 }}>
+                            Clientes agendados para {datasIguais(data, new Date()) ? 'hoje' : formatarDataBR(data)}
+                        </Text>
+                        <FlatList
+                            data={itens}
+                            keyExtractor={(item) => item.id}
+                            renderItem={({ item }) => (
+                                <View style={styles.item} key={item.nome}>
+                                    <Text>{item.nome} - {formatarHorarioBR(item.horario)}</Text>
+
+                                    <View style={{ display: 'flex', flexDirection: 'row' }}>
+                                        <IconButton
+                                            icon="pencil"
+                                            iconColor={MD3Colors.primary60}
+                                            size={20}
+                                            onPress={() => navigation.navigate('create', {cliente: item})}
+                                        />
+                                        <IconButton
+                                            icon="delete"
+                                            iconColor={MD3Colors.error50}
+                                            size={20}
+                                            onPress={() => {
+                                                setAgendamentoSelecionado(item)
+                                                setModalDeleteVisible(true)
+                                            }}
+                                        />
+                                    </View>
+                                </View>
+                            )}
+                        />
+                    </>
+                ) : <Text style={{ textAlign: "center", fontWeight: "bold", fontSize: 18, marginBottom: 12 }}>Nenhum cliente encontrado</Text>}
+                <FAB
+                    icon="plus"
+                    style={styles.fab1}
+                    onPress={() => navigation.navigate('create')}
+                />
+                <FAB
+                    icon="calendar-edit"
+                    style={styles.fab2}
+                    onPress={() => setMostrarPicker(true)}
+                />
+                {mostrarPicker && (
+                    <RNDateTimePicker
+                        value={data ?? new Date()}
+                        mode="date"
+                        display="default"
+                        onChange={(_evt, newDate) => {
+                            setMostrarPicker(false)
+                            setData(newDate)
+                        }}
+                    />
+                )}
+                <Portal>
+                    <Modal visible={modalDeleteVisible} contentContainerStyle={styles.modalContainer} onDismiss={() => {
+                        setAgendamentoSelecionado(null)
+                        setModalDeleteVisible(false)
+                    }}>
+                        <Text>Deseja mesmo excluir agendamento?</Text>
+
+                        <View style={{ display: 'flex', flexDirection: 'row', gap: 16 }}>
+                            <Button mode="text" onPress={() => {
+                                setAgendamentoSelecionado(null)
+                                setModalDeleteVisible(false)
+                            }}>
+                                Cancelar
+                            </Button>
+                            <Button mode="outlined" onPress={() => removerItem()}>
+                                Confirmar
+                            </Button>
+                        </View>
+                    </Modal>
+                </Portal>
+            </View>
+        </PaperProvider>
+    )
+}
 
 export default ListaDeItens

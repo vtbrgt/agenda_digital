@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import CriarCliente from "@/app/(tabs)/create";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -21,6 +22,7 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/*<Stack.Screen name="create" options={{ headerShown: false }} component={CriarCliente} />*/}
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
